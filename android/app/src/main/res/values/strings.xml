@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Asaan Udhaar</string>
+    <string name="title_activity_main">Asaan Udhaar</string>
+    <string name="package_name">com.asaanudhaar.app</string>
+    <string name="custom_url_scheme">com.asaanudhaar.app</string>
+</resources>
