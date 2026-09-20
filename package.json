@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "electron:dev": "concurrently \"pnpm dev\" \"wait-on http://localhost:3000 && electron .\"",
-    "electron:build": "pnpm build && electron-builder --windows --x64"
+    "electron:build": "pnpm build && electron-builder --windows --x64 --publish never"
   },
   "dependencies": {
     "@capacitor/core": "^8.5.2",
