@@ -1,2 +1,4 @@
 allowBuilds:
   electron-winstaller: true
+  unrs-resolver: true
+  sharp: true
