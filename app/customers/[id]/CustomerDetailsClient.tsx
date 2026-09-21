@@ -296,7 +296,7 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
 
         <div className="grid grid-cols-2 gap-3">
           <Link
-            href={`/customers/${customer.id}/udhaar`}
+            href={`/customers/udhaar?id=${customerId}`}
             className="flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold py-3 px-4 rounded-xl shadow-xs transition text-sm"
           >
             <ArrowUpRight size={18} />
@@ -304,7 +304,7 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
           </Link>
 
           <Link
-            href={`/customers/${customer.id}/payment`}
+            href={`/customers/payment?id=${customerId}`}
             className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-4 rounded-xl shadow-xs transition text-sm"
           >
             <ArrowDownLeft size={18} />
