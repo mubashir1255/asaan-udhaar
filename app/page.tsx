@@ -373,7 +373,7 @@ export default function Home() {
                     return (
                       <Link
                         key={activity.id}
-                        href={`/customers/${activity.customerId}`}
+                        href={`/customers/details?id=${activity.customerId}`}
                         className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
                       >
                         <div className="flex items-center gap-4 min-w-0 flex-1">

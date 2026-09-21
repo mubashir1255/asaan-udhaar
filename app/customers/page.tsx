@@ -175,7 +175,7 @@ export default function CustomersPage() {
             filteredCustomers.map((c) => (
               <Link
                 key={c.id}
-                href={`/customers/${c.id}`}
+                href={`/customers/details?id=${c.id}`}
                 className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
               >
                 <div className="min-w-0 flex-1">
