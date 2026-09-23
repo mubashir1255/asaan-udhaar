@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import RecordPaymentClient from "../[id]/payment/RecordPaymentClient";
+import RecordPaymentClient from "../components/RecordPaymentClient";
 
 function PaymentContent() {
   const searchParams = useSearchParams();

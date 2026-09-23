@@ -18,6 +18,7 @@ import { useStore } from "@/lib/store";
 import { translations } from "@/lib/translations";
 import {
   formatCurrency,
+  getCustomerBalance,
   getTotalReceived,
   getTotalUdhaar,
   type Transaction,
@@ -62,8 +63,25 @@ export default function ReportsPage() {
       };
     }
 
-    const allTx: Transaction[] = Object.values(transactions || {}).flat();
-    const udhaar = getTotalUdhaar(allTx);
+    const allTx: Transaction[] = Array.isArray(transactions)
+      ? transactions
+      : (Object.values(transactions || {}).flat() as unknown as Transaction[]);
+
+    const extraOpeningUdhaar = customers
+      .filter(
+        (c) =>
+          Number(c.openingBalance || 0) > 0 &&
+          !allTx.some(
+            (t) =>
+              t.customerId === c.id &&
+              (t.isOpeningBalance ||
+                t.description === "Opening Balance" ||
+                t.description === "سابقہ بقایا رقم")
+          )
+      )
+      .reduce((sum, c) => sum + Number(c.openingBalance || 0), 0);
+
+    const udhaar = getTotalUdhaar(allTx) + extraOpeningUdhaar;
     const received = getTotalReceived(allTx);
 
     // Today's Date Filter (YYYY-MM-DD)
@@ -75,8 +93,7 @@ export default function ReportsPage() {
     // Calculate balances per customer and pick top 5 who owe the most
     const customerBalances = customers
       .map((c) => {
-        const cTx = transactions[c.id] || [];
-        const balance = getTotalUdhaar(cTx) - getTotalReceived(cTx);
+        const { balance } = getCustomerBalance(c, allTx);
         return {
           id: c.id,
           name: c.name,
@@ -105,7 +122,7 @@ export default function ReportsPage() {
     csvContent += "Customer Name,Phone,Outstanding Balance (PKR)\n";
 
     customers.forEach((c) => {
-      const cTx = transactions[c.id] || [];
+      const cTx = (transactions as unknown as Record<string, Transaction[]>)[c.id] || [];
       const balance = getTotalUdhaar(cTx) - getTotalReceived(cTx);
       csvContent += `"${c.name}","${c.phone || ""}","${balance}"\n`;
     });
@@ -271,7 +288,7 @@ export default function ReportsPage() {
               {topDefaulters.map((c, index) => (
                 <Link
                   key={c.id}
-                  href={`/customers/${c.id}`}
+                  href={`/customers/details?id=${c.id}`}
                   className="py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition px-2 rounded-lg"
                 >
                   <div className="flex items-center gap-3">

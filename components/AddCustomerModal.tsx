@@ -1,54 +1,46 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import {
-  ArrowLeft,
-  UserPlus,
-  Phone,
-  MapPin,
-  Save,
-} from "lucide-react";
+import { useState } from "react";
+import { X, UserPlus, Phone, MapPin, Save } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { translations } from "@/lib/translations";
-import type { Customer, Transaction } from "@/lib/types";
+import type { Customer } from "@/lib/types";
 
-const emptySubscribe = () => () => {};
-function useHydrated() {
-  return useSyncExternalStore(
-    emptySubscribe,
-    () => true,
-    () => false
-  );
+interface AddCustomerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onCustomerCreated?: (customerId: string) => void;
 }
 
-export default function NewCustomerPage() {
-  const router = useRouter();
-  const hasHydrated = useHydrated();
-
+export default function AddCustomerModal({
+  isOpen,
+  onClose,
+  onCustomerCreated,
+}: AddCustomerModalProps) {
   const language = useStore((state) => state.language);
   const addCustomer = useStore((state) => state.addCustomer);
-  const addTransaction = useStore((state) => state.addTransaction);
 
-  const t = translations[hasHydrated ? language : "ur"];
-  const isRTL = hasHydrated ? language === "ur" : true;
+  const t = translations[language];
+  const isRTL = language === "ur";
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [openingBalance, setOpeningBalance] = useState("");
 
+  if (!isOpen) return null;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    // Generate a single UUID upfront
-    const newCustomerId = crypto.randomUUID();
+    // 1. Generate a single UUID upfront
+    const customerId = crypto.randomUUID();
     const balanceNum = parseFloat(openingBalance) || 0;
 
+    // 2. Initialize customer with upfront ID and opening balance
     const newCustomer: Customer = {
-      id: newCustomerId,
+      id: customerId,
       name: name.trim(),
       phone: phone.trim() || undefined,
       address: address.trim() || undefined,
@@ -58,6 +50,7 @@ export default function NewCustomerPage() {
       createdAt: new Date().toISOString(),
     };
 
+    // 3. Create customer and initial transaction linking exact customerId and customerName
     if (balanceNum > 0) {
       addCustomer(newCustomer, {
         amount: balanceNum,
@@ -68,44 +61,47 @@ export default function NewCustomerPage() {
       addCustomer(newCustomer);
     }
 
-    router.push(`/customers/details?id=${newCustomerId}`);
+    setName("");
+    setPhone("");
+    setAddress("");
+    setOpeningBalance("");
+
+    if (onCustomerCreated) {
+      onCustomerCreated(customerId);
+    }
+    onClose();
   };
 
   return (
-    <main
-      dir={isRTL ? "rtl" : "ltr"}
-      className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans transition-colors p-4"
-    >
-      <div className="mx-auto max-w-lg">
-        {/* Top Header */}
-        <div className="flex items-center justify-between mb-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+      <div
+        dir={isRTL ? "rtl" : "ltr"}
+        className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 shadow-2xl transition-all"
+      >
+        <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
-            <Link
-              href="/customers"
-              className="p-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-            >
-              <ArrowLeft size={20} className={isRTL ? "rotate-180" : ""} />
-            </Link>
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+              <UserPlus size={20} />
+            </span>
             <div>
-              <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
                 {t.addCustomer}
-              </h1>
+              </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {t.createKhaata}
               </p>
             </div>
           </div>
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-            <UserPlus size={20} />
-          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          >
+            <X size={20} />
+          </button>
         </div>
 
-        {/* Customer Form */}
-        <form
-          onSubmit={handleSubmit}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 shadow-2xs space-y-4"
-        >
-          {/* Customer Name */}
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
               {language === "ur" ? "گاہک کا نام *" : "Customer Name *"}
@@ -123,7 +119,6 @@ export default function NewCustomerPage() {
             />
           </div>
 
-          {/* Customer Phone */}
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1">
               <Phone size={13} />
@@ -142,7 +137,6 @@ export default function NewCustomerPage() {
             />
           </div>
 
-          {/* Address */}
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1">
               <MapPin size={13} />
@@ -153,7 +147,9 @@ export default function NewCustomerPage() {
             <input
               type="text"
               placeholder={
-                language === "ur" ? "مثلاً مین بازار، دکان نمبر 4" : "e.g. Main Bazar, Shop 4"
+                language === "ur"
+                  ? "مثلاً مین بازار، دکان نمبر 4"
+                  : "e.g. Main Bazar, Shop 4"
               }
               value={address}
               onChange={(e) => setAddress(e.target.value)}
@@ -161,7 +157,6 @@ export default function NewCustomerPage() {
             />
           </div>
 
-          {/* Opening Balance */}
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
               {language === "ur"
@@ -184,17 +179,26 @@ export default function NewCustomerPage() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition shadow-xs flex items-center justify-center gap-2 pt-2.5"
-          >
-            <Save size={18} />
-            <span>
-              {language === "ur" ? "کھاتہ کھولیں (محفوظ کریں)" : "Create Khaata Account"}
-            </span>
-          </button>
+          <div className="pt-2 flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold rounded-xl text-sm transition"
+            >
+              {language === "ur" ? "منسوخ کریں" : "Cancel"}
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition shadow-xs flex items-center justify-center gap-1.5"
+            >
+              <Save size={16} />
+              <span>
+                {language === "ur" ? "محفوظ کریں" : "Save"}
+              </span>
+            </button>
+          </div>
         </form>
       </div>
-    </main>
+    </div>
   );
 }

@@ -19,12 +19,14 @@ import {
   Share2,
   Download,
   AlertCircle,
+  ShoppingBag,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { translations } from "@/lib/translations";
 import {
   formatCurrency,
   formatDate,
+  getCustomerBalance,
   getTotalReceived,
   getTotalUdhaar,
   exportCustomerLedgerCSV,
@@ -69,7 +71,9 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
 
   const transactions = useMemo(() => {
     if (!hasHydrated || !customerId) return EMPTY_LIST;
-    return transactionsMap[customerId] || EMPTY_LIST;
+    return Array.isArray(transactionsMap)
+      ? transactionsMap.filter((t) => t.customerId === customerId)
+      : EMPTY_LIST;
   }, [transactionsMap, customerId, hasHydrated]);
 
   const t = translations[hasHydrated ? language : "ur"];
@@ -100,9 +104,8 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
     );
   }
 
-  const totalUdhaar = getTotalUdhaar(transactions);
-  const totalReceived = getTotalReceived(transactions);
-  const outstanding = totalUdhaar - totalReceived;
+  const { totalUdhaar, totalReceived, balance: outstanding } =
+    getCustomerBalance(customer, transactions);
   const isOverdue = isCustomerOverdue(transactions, outstanding);
 
   const sendWhatsAppReminder = () => {
@@ -147,13 +150,33 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
 
     let message = "";
     if (lang === "en") {
+      let itemsList = "";
+      if (tx.items && tx.items.length > 0) {
+        itemsList =
+          `\n📦 *Purchased Items:*\n` +
+          tx.items
+            .map(
+              (item, i) =>
+                `${i + 1}. ${item.name} (${item.quantity}x @ Rs ${item.unitPrice}) = Rs ${item.total}`
+            )
+            .join("\n") +
+          `\n`;
+      }
+
       message =
         `🧾 *TRANSACTION RECEIPT*\n` +
         `🏪 *Store:* ${store}\n` +
         `👤 *Customer:* ${customer.name}\n` +
         `📅 *Date:* ${dateStr}\n` +
         `━━━━━━━━━━━━━━━\n` +
-        `📌 *Type:* ${tx.type === "udhaar" ? "Credit (Udhaar Given)" : "Payment Received"}\n` +
+        `📌 *Type:* ${
+          tx.type === "udhaar"
+            ? "Credit (Udhaar Given)"
+            : tx.type === "sale"
+            ? "Cash Sale (POS)"
+            : "Payment Received"
+        }\n` +
+        itemsList +
         `💵 *Amount:* ${amountStr}\n` +
         (tx.description ? `📝 *Note:* ${tx.description}\n` : "") +
         (tx.dueDate ? `⏰ *Promised Date:* ${tx.dueDate}\n` : "") +
@@ -161,13 +184,33 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
         `*Net Outstanding Balance:* ${balanceStr}\n\n` +
         `Thank you for doing business with us!`;
     } else {
+      let itemsList = "";
+      if (tx.items && tx.items.length > 0) {
+        itemsList =
+          `\n📦 *اشیاء کی تفصیل:*\n` +
+          tx.items
+            .map(
+              (item, i) =>
+                `${i + 1}۔ ${item.name} (${item.quantity}x فی ریٹ Rs ${item.unitPrice}) = Rs ${item.total}`
+            )
+            .join("\n") +
+          `\n`;
+      }
+
       message =
         `🧾 *کھاتہ رسید*\n` +
         `🏪 *دکان:* ${store}\n` +
         `👤 *گاہک:* ${customer.name}\n` +
         `📅 *تاریخ:* ${dateStr}\n` +
         `━━━━━━━━━━━━━━━\n` +
-        `📌 *تفصیل:* ${tx.type === "udhaar" ? "ادھار دیا گیا (+)" : "رقم وصول ہوئی (–)"}\n` +
+        `📌 *تفصیل:* ${
+          tx.type === "udhaar"
+            ? "ادھار دیا گیا (+)"
+            : tx.type === "sale"
+            ? "کیش سیل (+)"
+            : "رقم وصول ہوئی (–)"
+        }\n` +
+        itemsList +
         `💵 *رقم:* ${amountStr}\n` +
         (tx.description ? `📝 *نوٹ:* ${tx.description}\n` : "") +
         (tx.dueDate ? `⏰ *وعدہ تاریخ:* ${tx.dueDate}\n` : "") +
@@ -357,59 +400,94 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
             </div>
           ) : (
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {transactions.map((tx) => {
-                const isUdhaar = tx.type === "udhaar";
+              {transactions.map((tx: Transaction) => {
+                const isUdhaar = tx.type === "udhaar" || tx.type === "sale";
+                const hasItems = tx.items && tx.items.length > 0;
 
                 return (
                   <div
                     key={tx.id}
-                    className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
+                    className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition space-y-2"
                   >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div
-                        className={`h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                          isUdhaar
-                            ? "bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400"
-                            : "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400"
-                        }`}
-                      >
-                        {isUdhaar ? <ArrowUpRight size={18} /> : <ArrowDownLeft size={18} />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
-                          {tx.description || (isUdhaar ? t.udhaarGiven : t.paymentReceived)}
-                        </p>
-                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">
-                          <span>{formatDate(tx.date)}</span>
-                          {tx.dueDate && (
-                            <span className="text-amber-600 dark:text-amber-400 font-medium">
-                              • {language === "ur" ? "وعدہ:" : "Due:"} {tx.dueDate}
-                            </span>
-                          )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div
+                          className={`h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                            isUdhaar
+                              ? "bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400"
+                              : "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400"
+                          }`}
+                        >
+                          {isUdhaar ? <ArrowUpRight size={18} /> : <ArrowDownLeft size={18} />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
+                              {tx.description ||
+                                (tx.type === "sale"
+                                  ? "کیش بل (POS Sale)"
+                                  : isUdhaar
+                                  ? t.udhaarGiven
+                                  : t.paymentReceived)}
+                            </p>
+                            {hasItems && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900">
+                                <ShoppingBag size={10} />
+                                <span>{tx.items?.length} items</span>
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">
+                            <span>{formatDate(tx.date)}</span>
+                            {tx.dueDate && (
+                              <span className="text-amber-600 dark:text-amber-400 font-medium">
+                                • {language === "ur" ? "وعدہ:" : "Due:"} {tx.dueDate}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
+
+                      <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                        <p
+                          className={`text-sm font-bold ${
+                            isUdhaar
+                              ? "text-rose-600 dark:text-rose-400"
+                              : "text-emerald-600 dark:text-emerald-400"
+                          }`}
+                        >
+                          {isUdhaar ? "+" : "−"} {formatCurrency(tx.amount)}
+                        </p>
+
+                        <button
+                          onClick={() => {
+                            setSelectedTx(tx);
+                            setShowSlipModal(true);
+                          }}
+                          className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition"
+                          title="Send WhatsApp Slip"
+                        >
+                          <Share2 size={15} />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-                      <p
-                        className={`text-sm font-bold ${
-                          isUdhaar ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"
-                        }`}
-                      >
-                        {isUdhaar ? "+" : "−"} {formatCurrency(tx.amount)}
-                      </p>
-
-                      <button
-                        onClick={() => {
-                          setSelectedTx(tx);
-                          setShowSlipModal(true);
-                        }}
-                        className="p-1.5 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition"
-                        title="Send WhatsApp Slip"
-                      >
-                        <Share2 size={15} />
-                      </button>
-                    </div>
+                    {/* Itemized Line Items Preview */}
+                    {hasItems && (
+                      <div className="ml-12 pl-2 border-l-2 border-slate-100 dark:border-slate-800 space-y-1 pt-1">
+                        {tx.items?.map((item, idx) => (
+                          <div
+                            key={item.id || idx}
+                            className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400"
+                          >
+                            <span>
+                              {item.name} &times; <strong>{item.quantity}</strong>
+                            </span>
+                            <span className="font-mono">Rs {item.total.toLocaleString("en-PK")}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -418,6 +496,7 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
         </div>
       </div>
 
+      {/* WhatsApp Slip Modal */}
       {showSlipModal && selectedTx && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl p-5 shadow-xl border border-slate-200 dark:border-slate-800 space-y-4">
@@ -451,13 +530,28 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
               </button>
             </div>
 
-            <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-1.5">
+            <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-1.5 max-h-56 overflow-y-auto">
               <div className="flex justify-between">
                 <span className="text-slate-500 dark:text-slate-400">{slipLang === "ur" ? "گاہک:" : "Customer:"}</span>
                 <span className="font-semibold">{customer.name}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">{slipLang === "ur" ? "رقم:" : "Amount:"}</span>
+
+              {selectedTx.items && selectedTx.items.length > 0 && (
+                <div className="pt-1 border-t border-slate-200 dark:border-slate-700">
+                  <div className="font-semibold mb-1 text-[11px] text-slate-500">
+                    {slipLang === "ur" ? "اشیاء کی فہرست:" : "Items Breakdown:"}
+                  </div>
+                  {selectedTx.items.map((item, i) => (
+                    <div key={item.id || i} className="flex justify-between text-[11px]">
+                      <span>{item.name} ({item.quantity}x)</span>
+                      <span>Rs {item.total}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-between pt-1 border-t border-slate-200 dark:border-slate-700">
+                <span className="text-slate-500 dark:text-slate-400">{slipLang === "ur" ? "رقم:" : "Bill Amount:"}</span>
                 <span className="font-bold text-emerald-600 dark:text-emerald-400">
                   Rs. {selectedTx.amount.toLocaleString("en-PK")}
                 </span>
@@ -481,6 +575,7 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
         </div>
       )}
 
+      {/* Thermal Print Modal */}
       {showPrintModal && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl p-5 shadow-xl border border-slate-200 dark:border-slate-800 space-y-4">
@@ -522,15 +617,27 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
 
               <div className="space-y-1 my-2">
                 <div className="flex justify-between font-bold border-b border-black pb-1">
-                  <span>Type / Item</span>
-                  <span>Amount</span>
+                  <span>Item / Type</span>
+                  <span>Total</span>
                 </div>
-                {transactions.slice(0, 8).map((tx) => (
-                  <div key={tx.id} className="flex justify-between text-[10px]">
-                    <span className="truncate max-w-[130px]">
-                      {tx.type === "udhaar" ? "+ Udhaar" : "- Paid"} ({formatDate(tx.date)})
-                    </span>
-                    <span>Rs {tx.amount.toLocaleString("en-PK")}</span>
+                {transactions.slice(0, 10).map((tx) => (
+                  <div key={tx.id} className="text-[10px] py-0.5 border-b border-slate-100">
+                    <div className="flex justify-between font-semibold">
+                      <span className="truncate max-w-[150px]">
+                        {tx.type === "udhaar" ? "+ Udhaar" : tx.type === "sale" ? "+ Sale" : "- Paid"} ({formatDate(tx.date)})
+                      </span>
+                      <span>Rs {tx.amount.toLocaleString("en-PK")}</span>
+                    </div>
+                    {tx.items && tx.items.length > 0 && (
+                      <div className="pl-1 text-[9px] text-slate-600">
+                        {tx.items.map((it, i) => (
+                          <div key={i} className="flex justify-between">
+                            <span>- {it.name} x{it.quantity}</span>
+                            <span>{it.total}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

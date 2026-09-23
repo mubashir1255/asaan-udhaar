@@ -5,17 +5,19 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
-  ArrowDownLeft,
+  ArrowUpRight,
   MessageCircle,
   CheckCircle2,
   Calendar,
   FileText,
+  Clock,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { translations } from "@/lib/translations";
 import {
   formatCurrency,
   formatDate,
+  getCustomerBalance,
   getTotalReceived,
   getTotalUdhaar,
   type Transaction,
@@ -30,7 +32,7 @@ function useHydrated() {
   );
 }
 
-export default function RecordPaymentClient({ customerId }: { customerId: string }) {
+export default function GiveUdhaarClient({ customerId }: { customerId: string }) {
   const router = useRouter();
   const hasHydrated = useHydrated();
 
@@ -47,7 +49,7 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
 
   const customerTxs = useMemo(() => {
     if (!hasHydrated || !customerId) return [];
-    return transactionsMap[customerId] || [];
+    return Array.isArray(transactionsMap) ? transactionsMap.filter(t => t.customerId === customerId) : [];
   }, [transactionsMap, customerId, hasHydrated]);
 
   const t = translations[hasHydrated ? language : "ur"];
@@ -56,6 +58,7 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [dueDate, setDueDate] = useState("");
 
   const [savedTx, setSavedTx] = useState<Transaction | null>(null);
   const [showSlipModal, setShowSlipModal] = useState(false);
@@ -70,24 +73,25 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
     );
   }
 
-  const currentOutstanding =
-    getTotalUdhaar(customerTxs) - getTotalReceived(customerTxs);
+  const { balance: currentOutstanding } = getCustomerBalance(customer, customerTxs);
   const enteredAmount = parseFloat(amount) || 0;
-  const projectedNewBalance = Math.max(0, currentOutstanding - enteredAmount);
+  const projectedNewBalance = currentOutstanding + enteredAmount;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!enteredAmount || enteredAmount <= 0) return;
 
-    const finalBalance = Math.max(0, currentOutstanding - enteredAmount);
+    const finalBalance = currentOutstanding + enteredAmount;
     setModalBalance(finalBalance);
 
     const newTx: Transaction = {
       id: crypto.randomUUID(),
       customerId: customer.id,
-      type: "payment",
+      customerName: customer.name,
+      type: "udhaar",
       amount: enteredAmount,
       description: description.trim() || undefined,
+      dueDate: dueDate || undefined,
       date: new Date(date).toISOString(),
       createdAt: new Date().toISOString(),
     };
@@ -99,7 +103,7 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
 
   const sendWhatsAppSlip = (lang: "en" | "ur") => {
     if (!savedTx) {
-      router.push(`/customers/${customer.id}`);
+      router.push(`/customers/details?id=${customer.id}`);
       return;
     }
 
@@ -111,28 +115,30 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
     let message = "";
     if (lang === "en") {
       message =
-        `🧾 *PAYMENT RECEIPT*\n` +
+        `🧾 *CREDIT ENTRY CONFIRMATION*\n` +
         `🏪 *Store:* ${store}\n` +
         `👤 *Customer:* ${customer.name}\n` +
         `📅 *Date:* ${dateStr}\n` +
         `━━━━━━━━━━━━━━━\n` +
-        `✅ *Amount Received:* ${amountStr}\n` +
-        (savedTx.description ? `📝 *Note:* ${savedTx.description}\n` : "") +
+        `➕ *Udhaar Added:* ${amountStr}\n` +
+        (savedTx.description ? `📝 *Items/Note:* ${savedTx.description}\n` : "") +
+        (savedTx.dueDate ? `⏰ *Promised Date:* ${savedTx.dueDate}\n` : "") +
         `━━━━━━━━━━━━━━━\n` +
-        `*Remaining Balance Due:* ${balanceStr}\n\n` +
-        `Thank you for your payment!`;
+        `*Total Outstanding Balance:* ${balanceStr}\n\n` +
+        `Thank you for your trust!`;
     } else {
       message =
-        `🧾 *وصولی رسید*\n` +
+        `🧾 *ادھار کھاتہ رسید*\n` +
         `🏪 *دکان:* ${store}\n` +
         `👤 *گاہک:* ${customer.name}\n` +
         `📅 *تاریخ:* ${dateStr}\n` +
         `━━━━━━━━━━━━━━━\n` +
-        `✅ *وصول شدہ رقم:* ${amountStr}\n` +
-        (savedTx.description ? `📝 *نوٹ:* ${savedTx.description}\n` : "") +
+        `➕ *نیا ادھار درج:* ${amountStr}\n` +
+        (savedTx.description ? `📝 *تفصیل/سامان:* ${savedTx.description}\n` : "") +
+        (savedTx.dueDate ? `⏰ *وعدہ تاریخ:* ${savedTx.dueDate}\n` : "") +
         `━━━━━━━━━━━━━━━\n` +
-        `*باقی واجب الادا رقم:* ${balanceStr}\n\n` +
-        `ادائیگی کا بہت شکریہ!`;
+        `*کل واجب الادا بقایا:* ${balanceStr}\n\n` +
+        `خریداری کا بہت شکریہ!`;
     }
 
     const encodedMsg = encodeURIComponent(message);
@@ -147,7 +153,7 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
       window.open(`https://api.whatsapp.com/send?text=${encodedMsg}`, "_blank");
     }
 
-    router.push(`/customers/${customer.id}`);
+    router.push(`/customers/details?id=${customer.id}`);
   };
 
   return (
@@ -159,22 +165,22 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Link
-              href={`/customers/${customer.id}`}
+              href={`/customers/details?id=${customer.id}`}
               className="p-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
             >
               <ArrowLeft size={20} className={isRTL ? "rotate-180" : ""} />
             </Link>
             <div>
               <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                {language === "ur" ? "رقم وصولی کا اندراج" : "Record Payment (Received)"}
+                {language === "ur" ? "ادھار کا اندراج" : "Give Credit (Udhaar)"}
               </h1>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {customer.name}
               </p>
             </div>
           </div>
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-            <ArrowDownLeft size={20} />
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+            <ArrowUpRight size={20} />
           </span>
         </div>
 
@@ -184,7 +190,7 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
         >
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
-              {language === "ur" ? "وصول شدہ رقم (روپے) *" : "Received Amount (PKR) *"}
+              {language === "ur" ? "ادھار کی رقم (روپے) *" : "Udhaar Amount (PKR) *"}
             </label>
             <div className="relative">
               <input
@@ -196,7 +202,7 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
                 placeholder="0"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full text-2xl font-bold bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full text-2xl font-bold bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-500"
               />
               <span className="absolute right-4 top-4 text-xs font-bold text-slate-400">
                 PKR
@@ -207,16 +213,16 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1">
               <FileText size={13} />
-              <span>{language === "ur" ? "تفصیل / ادائیگی کا طریقہ" : "Note / Payment Method"}</span>
+              <span>{language === "ur" ? "تفصیل / سامان کا نام" : "Description / Items"}</span>
             </label>
             <input
               type="text"
               placeholder={
-                language === "ur" ? "مثلاً کیش، ایزی پیسہ، جزوی ادائیگی" : "e.g. Cash, Easypaisa, Partial Payment"
+                language === "ur" ? "مثلاً 5 بوری سیمنٹ، چینی، وغیرہ" : "e.g. 5 cement bags, sugar, etc."
               }
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-500"
             />
           </div>
 
@@ -230,7 +236,24 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
               required
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+              <Clock size={13} className="text-amber-600 dark:text-amber-400" />
+              <span>
+                {language === "ur"
+                  ? "ادائیگی کا وعدہ / آخری تاریخ (اختیاری)"
+                  : "Promised Due Date (Optional)"}
+              </span>
+            </label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full text-sm bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-2.5 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
@@ -240,8 +263,8 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
               <span>{formatCurrency(currentOutstanding)}</span>
             </div>
             <div className="flex justify-between font-semibold text-slate-800 dark:text-slate-200 border-t border-slate-200 dark:border-slate-700 pt-1.5">
-              <span>{language === "ur" ? "باقی نیا بقایا:" : "Remaining Balance:"}</span>
-              <span className="text-emerald-600 dark:text-emerald-400">
+              <span>{language === "ur" ? "نیا متوقع بقایا:" : "Projected New Balance:"}</span>
+              <span className="text-rose-600 dark:text-rose-400">
                 {formatCurrency(projectedNewBalance)}
               </span>
             </div>
@@ -249,10 +272,10 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
 
           <button
             type="submit"
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm transition shadow-xs flex items-center justify-center gap-2"
+            className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl text-sm transition shadow-xs flex items-center justify-center gap-2"
           >
-            <ArrowDownLeft size={18} />
-            <span>{language === "ur" ? "محفوظ کریں (وصولی درج کریں)" : "Save Payment Entry"}</span>
+            <ArrowUpRight size={18} />
+            <span>{language === "ur" ? "محفوظ کریں (ادھار درج کریں)" : "Save Credit Entry"}</span>
           </button>
         </form>
       </div>
@@ -261,19 +284,19 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-2xl p-5 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="text-center space-y-1">
-              <div className="h-12 w-12 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center">
+              <div className="h-12 w-12 rounded-full bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 mx-auto flex items-center justify-center">
                 <CheckCircle2 size={26} />
               </div>
               <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                {language === "ur" ? "رقم وصولی کامیابی سے درج ہو گئی!" : "Payment Saved Successfully!"}
+                {language === "ur" ? "ادھار کامیابی سے درج ہو گیا!" : "Credit Entry Saved!"}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {customer.phone
                   ? language === "ur"
-                    ? "کیا آپ گاہک کو وصولی کی رسید بھیجنا چاہتے ہیں؟"
-                    : "Send WhatsApp confirmation receipt to customer?"
+                    ? "کیا آپ گاہک کو واٹس ایپ رسید بھیجنا چاہتے ہیں؟"
+                    : "Send WhatsApp confirmation slip to customer?"
                   : language === "ur"
-                  ? "گاہک کا فون نمبر درج نہیں ہے"
+                  ? "گاہک کا فون نمبر درج نہیں ہے (واٹس ایپ پر رابطہ منتخب کریں)"
                   : "No phone on file (Pick contact in WhatsApp)"}
               </p>
             </div>
@@ -301,13 +324,13 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
 
             <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-1.5">
               <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">{language === "ur" ? "وصول شدہ رقم:" : "Amount Received:"}</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="text-slate-500 dark:text-slate-400">{language === "ur" ? "اندراج شدہ رقم:" : "Recorded Amount:"}</span>
+                <span className="font-bold text-rose-600 dark:text-rose-400">
                   Rs. {savedTx.amount.toLocaleString("en-PK")}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-500 dark:text-slate-400">{language === "ur" ? "باقی بقایا رقم:" : "Remaining Balance:"}</span>
+                <span className="text-slate-500 dark:text-slate-400">{language === "ur" ? "کل بقایا رقم:" : "Total Balance Due:"}</span>
                 <span className="font-bold text-slate-800 dark:text-slate-200">
                   Rs. {modalBalance.toLocaleString("en-PK")}
                 </span>
@@ -324,7 +347,7 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
               </button>
 
               <button
-                onClick={() => router.push(`/customers/${customer.id}`)}
+                onClick={() => router.push(`/customers/details?id=${customer.id}`)}
                 className="w-full py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition text-center"
               >
                 {language === "ur" ? "کھاتے پر واپس جائیں" : "Skip / Back to Khaata"}

@@ -2,6 +2,7 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+
 @theme {
   /* Brand Green extracted directly from your logo */
   --color-emerald-50: #f1f7f3;

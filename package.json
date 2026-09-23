@@ -1,6 +1,6 @@
 {
   "name": "asaan-udhaar",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -19,11 +19,13 @@
     "next": "16.3.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "serve-handler": "^6.1.7",
     "uuid": "^14.0.2",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@capacitor/android": "^8.5.2",
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.5.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
@@ -31,10 +33,13 @@
     "@types/react-dom": "^19",
     "@types/uuid": "^11.0.0",
     "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
     "electron": "^44.4.3",
     "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
+    "png-to-ico": "^3.0.2",
+    "sharp": "^0.35.4",
     "tailwindcss": "^4",
     "typescript": "^5",
     "wait-on": "^9.1.0"
@@ -56,7 +61,7 @@
         "nsis",
         "portable"
       ],
-      "icon": "public/icon-512.png"
+      "icon": "public/logo.ico"
     },
     "nsis": {
       "oneClick": false,

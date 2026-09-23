@@ -49,18 +49,32 @@ export default function TransactionsPage() {
   const allEnrichedTransactions = useMemo(() => {
     if (!hasHydrated) return [];
 
-    const rawTxList: Transaction[] = Object.values(transactions || {}).flat();
+    const rawTxList: Transaction[] = Array.isArray(transactions)
+      ? transactions
+      : (Object.values(transactions || {}).flat() as unknown as Transaction[]);
+
     return rawTxList
+      .filter((tx) => Boolean(tx.customerId && tx.customerId.trim()))
       .map((tx) => {
         const customer = customers.find((c) => c.id === tx.customerId);
+        const resolvedName =
+          customer?.name ||
+          tx.customerName ||
+          (tx.customerId === "CASH_CUSTOMER"
+            ? language === "ur"
+              ? "نقد گاہک"
+              : "Cash Customer"
+            : language === "ur"
+            ? "نامعلوم گاہک"
+            : "Unknown Customer");
         return {
           ...tx,
-          customerName: customer?.name || "Unknown Customer",
+          customerName: resolvedName,
           customerPhone: customer?.phone || "",
         };
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [customers, transactions, hasHydrated]);
+  }, [customers, transactions, hasHydrated, language]);
 
   // Apply filters
   const filteredTransactions = useMemo(() => {
@@ -281,7 +295,11 @@ export default function TransactionsPage() {
                 return (
                   <Link
                     key={tx.id}
-                    href={`/customers/${tx.customerId}`}
+                    href={
+                      tx.customerId === "CASH_CUSTOMER"
+                        ? "/transactions"
+                        : `/customers/details?id=${tx.customerId}`
+                    }
                     className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
                   >
                     <div className="flex items-center gap-3.5 min-w-0 flex-1">

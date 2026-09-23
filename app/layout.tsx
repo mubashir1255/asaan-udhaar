@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import PinLockModal from "./components/PinLockModal";
+import ThemeSync from "./components/ThemeSync";
 import "./globals.css";
 
 export const viewport: Viewport = {
@@ -39,7 +40,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               try {
-                var stored = localStorage.getItem('asaan-udhaar-store');
+                var stored = localStorage.getItem('asaan-udhaar-storage');
                 if (stored) {
                   var parsed = JSON.parse(stored);
                   if (parsed.state && parsed.state.theme === 'dark') {
@@ -58,6 +59,7 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen transition-colors">
+        <ThemeSync />
         <PinLockModal />
         {children}
       </body>

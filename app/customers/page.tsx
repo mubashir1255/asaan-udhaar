@@ -15,6 +15,7 @@ import { useStore } from "@/lib/store";
 import { translations } from "@/lib/translations";
 import {
   formatCurrency,
+  getCustomerBalance,
   getTotalReceived,
   getTotalUdhaar,
   isCustomerOverdue,
@@ -45,14 +46,21 @@ export default function CustomersPage() {
     if (!hasHydrated) return [];
 
     return customers.map((customer) => {
-      const txs = transactionsMap[customer.id] || [];
-      const totalUdhaar = getTotalUdhaar(txs);
-      const totalReceived = getTotalReceived(txs);
-      const outstanding = totalUdhaar - totalReceived;
+      const txs = Array.isArray(transactionsMap)
+        ? transactionsMap.filter((t) => t.customerId === customer.id)
+        : [];
+      const { totalUdhaar, totalReceived, balance } = getCustomerBalance(
+        customer,
+        txs
+      );
+      const outstanding = balance;
       const isOverdue = isCustomerOverdue(txs, outstanding);
 
       return {
         ...customer,
+        currentBalance: balance,
+        totalUdhaar,
+        totalReceived,
         outstanding,
         isOverdue,
       };

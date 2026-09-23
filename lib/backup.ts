@@ -1,19 +1,20 @@
-import type { Language, Theme, BusinessProfile, Customer, Transaction } from "./types";
+import { Customer, Transaction, BusinessProfile, Product } from "./types";
 
 export interface BackupData {
-  version: number;
+  version: string | number;
   exportedAt: string;
-  language?: Language;
-  theme?: Theme;
-  businessProfile?: BusinessProfile | null;
-  customers?: Customer[];
-  transactions?: Record<string, Transaction[]>;
+  customers: Customer[];
+  transactions: Transaction[] | Record<string, Transaction[]>;
+  products?: Product[];
+  businessProfile?: BusinessProfile;
   appPin?: string | null;
+  language?: string;
+  theme?: string;
 }
 
 export function exportBackupJSON(data: Omit<BackupData, "version" | "exportedAt">) {
   const fullBackup: BackupData = {
-    version: 1,
+    version: "1",
     exportedAt: new Date().toISOString(),
     ...data,
   };

@@ -103,7 +103,7 @@ export default function SettingsPage() {
       theme: state.theme,
       businessProfile: state.businessProfile,
       customers: state.customers,
-      transactions: state.transactions,
+      transactions: state.transactions as any,
       appPin: state.appPin,
     });
   };

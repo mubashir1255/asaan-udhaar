@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import GiveUdhaarClient from "../[id]/udhaar/GiveUdhaarClient";
+import GiveUdhaarClient from "../components/GiveUdhaarClient";
 
 function UdhaarContent() {
   const searchParams = useSearchParams();

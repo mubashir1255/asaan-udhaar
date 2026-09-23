@@ -16,6 +16,9 @@ import {
   Moon,
   Languages,
   Smile,
+  ShoppingCart,
+  Package,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { getTodayQuote } from "@/lib/quotes";
@@ -46,6 +49,7 @@ export default function Home() {
   const toggleTheme = useStore((state) => state.toggleTheme);
   const customers = useStore((state) => state.customers);
   const transactions = useStore((state) => state.transactions);
+  const products = useStore((state) => state.products || []);
 
   const todayQuote = useMemo(() => getTodayQuote(), []);
 
@@ -53,21 +57,64 @@ export default function Home() {
   const isRTL = hasHydrated ? language === "ur" : true;
 
   const allTransactions: Transaction[] = hasHydrated
-    ? Object.values(transactions || {}).flat()
+    ? Array.isArray(transactions)
+      ? (transactions as Transaction[])
+      : (Object.values(transactions || {}).flat() as Transaction[])
     : [];
 
-  const totalUdhaar = getTotalUdhaar(allTransactions);
-  const totalReceived = getTotalReceived(allTransactions);
-  const outstanding = totalUdhaar - totalReceived;
+  const extraOpeningUdhaar = hasHydrated
+    ? (customers || [])
+        .filter(
+          (c) =>
+            Number(c.openingBalance || 0) > 0 &&
+            !allTransactions.some(
+              (t) =>
+                t.customerId === c.id &&
+                (t.isOpeningBalance ||
+                  t.description === "Opening Balance" ||
+                  t.description === "سابقہ بقایا رقم")
+            )
+        )
+        .reduce((sum, c) => sum + Number(c.openingBalance || 0), 0)
+    : 0;
+
+  const totalUdhaar = getTotalUdhaar(allTransactions) + extraOpeningUdhaar;
+  
+  // Includes both customer debt payments and direct cash POS sales:
+  const totalReceived = allTransactions
+    .filter((t) => t.type === "payment" || t.type === "sale")
+    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+  // Outstanding only tracks unpaid customer udhaar:
+  const customerPayments = getTotalReceived(allTransactions);
+  const outstanding = Math.max(0, totalUdhaar - customerPayments);
+
   const customerCount = hasHydrated ? (customers?.length || 0) : 0;
+
+  // Low stock calculation
+  const lowStockProducts = useMemo(() => {
+    if (!hasHydrated) return [];
+    return products.filter((p) => p.stockQuantity <= 5);
+  }, [products, hasHydrated]);
 
   const recentActivity = hasHydrated
     ? allTransactions
+        .filter((tx) => Boolean(tx.customerId && tx.customerId.trim()))
         .map((tx) => {
           const customer = customers.find((c) => c.id === tx.customerId);
+          const resolvedName =
+            customer?.name ||
+            tx.customerName ||
+            (tx.customerId === "CASH_CUSTOMER"
+              ? language === "ur"
+                ? "نقد گاہک"
+                : "Cash Customer"
+              : language === "ur"
+              ? "نامعلوم گاہک"
+              : "Unknown Customer");
           return {
             ...tx,
-            customerName: customer?.name || "Unknown Customer",
+            customerName: resolvedName,
           };
         })
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -77,6 +124,8 @@ export default function Home() {
   const navigation = [
     { label: t.nav.dashboard, icon: LayoutDashboard, href: "/" },
     { label: t.nav.customers, icon: Users, href: "/customers" },
+    { label: "POS Billing", icon: ShoppingCart, href: "/pos" },
+    { label: "Inventory", icon: Package, href: "/inventory" },
     { label: t.nav.transactions, icon: ReceiptText, href: "/transactions" },
     { label: t.nav.reports, icon: WalletCards, href: "/reports" },
     { label: t.nav.settings, icon: Settings, href: "/settings" },
@@ -109,7 +158,7 @@ export default function Home() {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 p-4">
+        <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
           {navigation.map((item) => {
             const Icon = item.icon;
             const isActive = item.href === "/";
@@ -165,7 +214,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Header Controls: Theme + Language Switchers */}
+            {/* Header Controls */}
             <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={toggleTheme}
@@ -200,7 +249,7 @@ export default function Home() {
         <section className="px-4 py-6 pb-28 sm:px-6 lg:px-8 lg:py-8 lg:pb-8">
           <div className="mx-auto max-w-7xl">
             {/* Welcoming Banner with Smiley & Daily Quranic Reminder */}
-            <div className="mb-7 rounded-2xl border border-emerald-100 dark:border-emerald-950/80 bg-gradient-to-r from-emerald-50/70 via-white to-emerald-50/30 dark:from-emerald-950/20 dark:via-slate-900 dark:to-slate-900 p-5 shadow-2xs transition-all">
+            <div className="mb-6 rounded-2xl border border-emerald-100 dark:border-emerald-950/80 bg-gradient-to-r from-emerald-50/70 via-white to-emerald-50/30 dark:from-emerald-950/20 dark:via-slate-900 dark:to-slate-900 p-5 shadow-2xs transition-all">
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-xs">
                   <Smile size={26} className="stroke-[2.2]" />
@@ -221,7 +270,7 @@ export default function Home() {
                     &quot;{todayQuote.ar}&quot;
                   </p>
 
-                  {/* Bilingual Translation & Surah Reference */}
+                  {/* Bilingual Translation & Reference */}
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-600 dark:text-slate-300">
                     <span>
                       {hasHydrated && language === "en" ? todayQuote.en : todayQuote.ur}
@@ -232,6 +281,67 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Low Stock Warning Banner */}
+            {lowStockProducts.length > 0 && (
+              <div className="mb-6 rounded-2xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/80 dark:bg-rose-950/30 p-4 transition-all">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-400 rounded-xl shrink-0">
+                      <AlertTriangle size={20} />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs sm:text-sm font-bold text-rose-800 dark:text-rose-200 truncate">
+                        {language === "en"
+                          ? `Low Stock Warning (${lowStockProducts.length} items)`
+                          : `کم اسٹاک کی اطلاع (${lowStockProducts.length} اشیاء)`}
+                      </h4>
+                      <p className="text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 mt-0.5 truncate">
+                        {language === "en"
+                          ? `${lowStockProducts.map((p) => p.name).slice(0, 3).join(", ")}${lowStockProducts.length > 3 ? "..." : ""} running out of stock.`
+                          : `${lowStockProducts.map((p) => p.name).slice(0, 3).join("، ")}${lowStockProducts.length > 3 ? "..." : ""} کی مقدار 5 یا اس سے کم ہے۔`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link
+                    href="/inventory"
+                    className="shrink-0 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold shadow-xs transition"
+                  >
+                    {language === "en" ? "Restock" : "اسٹاک بڑھائیں"}
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* Quick POS & Inventory Actions */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              <Link
+                href="/pos"
+                className="flex items-center gap-3 p-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl shadow-sm transition"
+              >
+                <div className="p-2.5 bg-white/20 rounded-xl">
+                  <ShoppingCart size={22} />
+                </div>
+                <div className="text-left">
+                  <div className="font-bold text-sm">POS Billing</div>
+                  <div className="text-[11px] text-emerald-100">Quick counter sales</div>
+                </div>
+              </Link>
+
+              <Link
+                href="/inventory"
+                className="flex items-center gap-3 p-4 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm transition"
+              >
+                <div className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-xl">
+                  <Package size={22} />
+                </div>
+                <div className="text-left">
+                  <div className="font-bold text-sm text-slate-900 dark:text-slate-100">Inventory</div>
+                  <div className="text-[11px] text-slate-400">Stock & pricing</div>
+                </div>
+              </Link>
             </div>
 
             {/* KPI Cards */}
@@ -373,7 +483,11 @@ export default function Home() {
                     return (
                       <Link
                         key={activity.id}
-                        href={`/customers/details?id=${activity.customerId}`}
+                        href={
+                          activity.customerId === "CASH_CUSTOMER"
+                            ? "/transactions"
+                            : `/customers/details?id=${activity.customerId}`
+                        }
                         className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition"
                       >
                         <div className="flex items-center gap-4 min-w-0 flex-1">
@@ -436,7 +550,7 @@ export default function Home() {
         {/* Mobile Bottom Navigation */}
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur lg:hidden">
           <div className="grid grid-cols-5">
-            {navigation.map((item) => {
+            {navigation.slice(0, 5).map((item) => {
               const Icon = item.icon;
               const isActive = item.href === "/";
 
