@@ -20,6 +20,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { getTodayQuote } from "@/lib/quotes";
 import { useStore } from "@/lib/store";
 import { translations } from "@/lib/translations";
@@ -40,7 +41,13 @@ function useHydrated() {
   );
 }
 
+function isNavActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export default function Home() {
+  const pathname = usePathname() || "/";
   const hasHydrated = useHydrated();
   const language = useStore((state) => state.language);
   const toggleLanguage = useStore((state) => state.toggleLanguage);
@@ -170,7 +177,7 @@ export default function Home() {
         <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
           {navigation.map((item) => {
             const Icon = item.icon;
-            const isActive = item.href === "/";
+            const isActive = isNavActive(pathname, item.href);
 
             return (
               <Link
@@ -555,7 +562,7 @@ export default function Home() {
           <div className="grid grid-cols-6">
             {mobileNavigation.map((item) => {
               const Icon = item.icon;
-              const isActive = item.href === "/";
+              const isActive = isNavActive(pathname, item.href);
 
               return (
                 <Link

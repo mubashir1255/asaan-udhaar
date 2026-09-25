@@ -80,7 +80,9 @@ export const useStore = create<AppState>()(
       toggleTheme: () =>
         set((state) => ({ theme: state.theme === "light" ? "dark" : "light" })),
 
-      setAppPin: (appPin) => set({ appPin, isLocked: false }),
+      // Setting/updating a PIN locks until the user authenticates this session.
+      // Removing a PIN clears the lock. Unlock is session-only (not persisted).
+      setAppPin: (appPin) => set({ appPin, isLocked: Boolean(appPin) }),
       lockApp: () => set({ isLocked: true }),
       unlockApp: (pin) => {
         if (get().appPin === pin) {
