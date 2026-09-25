@@ -43,6 +43,7 @@ export default function InventoryPage() {
   const [salePrice, setSalePrice] = useState("");
   const [stockQuantity, setStockQuantity] = useState("");
   const [unit, setUnit] = useState("pcs");
+  const [barcode, setBarcode] = useState("");
 
   // Stock Adjustment Quick Modal
   const [adjustModalProduct, setAdjustModalProduct] = useState<Product | null>(null);
@@ -57,6 +58,7 @@ export default function InventoryPage() {
       setSalePrice(String(product.salePrice));
       setStockQuantity(String(product.stockQuantity));
       setUnit(product.unit || "pcs");
+      setBarcode(product.barcode || "");
     } else {
       setEditingProduct(null);
       setName("");
@@ -64,6 +66,7 @@ export default function InventoryPage() {
       setSalePrice("");
       setStockQuantity("");
       setUnit("pcs");
+      setBarcode("");
     }
     setIsModalOpen(true);
   };
@@ -75,6 +78,7 @@ export default function InventoryPage() {
     const parsedCost = parseFloat(costPrice) || 0;
     const parsedSale = parseFloat(salePrice) || 0;
     const parsedStock = parseInt(stockQuantity, 10) || 0;
+    const trimmedBarcode = barcode.trim() || undefined;
 
     if (editingProduct) {
       updateProduct(editingProduct.id, {
@@ -83,6 +87,7 @@ export default function InventoryPage() {
         salePrice: parsedSale,
         stockQuantity: parsedStock,
         unit: unit.trim() || "pcs",
+        barcode: trimmedBarcode,
       });
     } else {
       addProduct({
@@ -91,6 +96,7 @@ export default function InventoryPage() {
         salePrice: parsedSale,
         stockQuantity: parsedStock,
         unit: unit.trim() || "pcs",
+        barcode: trimmedBarcode,
       });
     }
 
@@ -387,6 +393,24 @@ export default function InventoryPage() {
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold mb-1 text-slate-600 dark:text-slate-400">
+                  Barcode (optional)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder="Scan or type barcode / SKU"
+                  value={barcode}
+                  onChange={(e) => setBarcode(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Use a laser scanner or type manually — used for quick POS lookup.
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">

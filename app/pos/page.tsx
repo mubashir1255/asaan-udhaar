@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { Product, LineItem } from "@/lib/types";
+import BarcodeScannerModal from "@/components/BarcodeScannerModal";
 import {
   ArrowLeft,
   Search,
@@ -18,6 +19,8 @@ import {
   Package,
   X,
   CheckCircle2,
+  ScanBarcode,
+  Camera,
 } from "lucide-react";
 
 export default function PosPage() {
@@ -25,7 +28,6 @@ export default function PosPage() {
   const {
     products = [],
     customers = [],
-    adjustStock,
     addTransaction,
     language = "en",
   } = useStore();
@@ -37,6 +39,14 @@ export default function PosPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState<LineItem[]>([]);
+  const [barcodeInput, setBarcodeInput] = useState("");
+  const [scanToast, setScanToast] = useState<{
+    type: "error" | "success";
+    message: string;
+  } | null>(null);
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Checkout modal states
   const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
@@ -47,8 +57,20 @@ export default function PosPage() {
   const [dueDate, setDueDate] = useState("");
   const [saleSuccess, setSaleSuccess] = useState(false);
 
+  const showScanToast = useCallback((type: "error" | "success", message: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setScanToast({ type, message });
+    toastTimerRef.current = setTimeout(() => setScanToast(null), 2800);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
   // Cart operations
-  const addToCart = (product: Product) => {
+  const addToCart = useCallback((product: Product) => {
     setCart((prevCart) => {
       const existing = prevCart.find((item) => item.productId === product.id);
       if (existing) {
@@ -65,7 +87,10 @@ export default function PosPage() {
         );
       } else {
         const lineItem: LineItem = {
-          id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+          id:
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : Date.now().toString(),
           productId: product.id,
           name: product.name,
           quantity: 1,
@@ -77,7 +102,48 @@ export default function PosPage() {
         return [...prevCart, lineItem];
       }
     });
-  };
+  }, []);
+
+  const handleBarcodeAdd = useCallback(
+    (rawCode: string) => {
+      const code = rawCode.trim();
+      if (!code) return;
+
+      const product = products.find(
+        (p) => p.barcode && p.barcode.trim() === code
+      );
+
+      if (!product) {
+        showScanToast(
+          "error",
+          language === "ur"
+            ? `بارکوڈ نہیں ملا: ${code}`
+            : `Barcode not found: ${code}`
+        );
+        setBarcodeInput("");
+        return;
+      }
+
+      const inCartQty =
+        cart.find((item) => item.productId === product.id)?.quantity || 0;
+
+      if (product.stockQuantity <= 0 || inCartQty >= product.stockQuantity) {
+        showScanToast(
+          "error",
+          language === "ur"
+            ? `${product.name} اسٹاک میں دستیاب نہیں`
+            : `${product.name} is out of stock`
+        );
+        setBarcodeInput("");
+        return;
+      }
+
+      addToCart(product);
+      setBarcodeInput("");
+      barcodeInputRef.current?.focus();
+    },
+    [products, cart, addToCart, showScanToast, language]
+  );
 
   const updateQuantity = (productId: string | undefined, delta: number) => {
     if (!productId) return;
@@ -129,9 +195,10 @@ export default function PosPage() {
   }, [products, searchQuery]);
 
   const filteredCustomers = useMemo(() => {
-    return customers.filter((c) =>
-      c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-      (c.phone && c.phone.includes(customerSearch))
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+        (c.phone && c.phone.includes(customerSearch))
     );
   }, [customers, customerSearch]);
 
@@ -145,7 +212,6 @@ export default function PosPage() {
 
     const txDate = new Date().toISOString();
 
-    // 1. Add transaction
     const selectedCustomerObj = customers.find((c) => c.id === selectedCustomerId);
     addTransaction({
       customerId: paymentMode === "udhaar" ? selectedCustomerId : "CASH_CUSTOMER",
@@ -158,12 +224,12 @@ export default function PosPage() {
       type: paymentMode === "udhaar" ? "udhaar" : "sale",
       amount: subtotal,
       items: cart,
-      description: description.trim() || (paymentMode === "cash" ? "Cash POS Sale" : "Itemized Udhaar Sale"),
+      description:
+        description.trim() ||
+        (paymentMode === "cash" ? "Cash POS Sale" : "Itemized Udhaar Sale"),
       dueDate: paymentMode === "udhaar" && dueDate ? dueDate : undefined,
       date: txDate,
     });
-
-// 2. Adjust stock
 
     setSaleSuccess(true);
     setTimeout(() => {
@@ -187,6 +253,20 @@ export default function PosPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 text-slate-900 dark:text-slate-100 flex flex-col">
+      {/* Scan toast */}
+      {scanToast && (
+        <div
+          className={`fixed top-4 inset-x-4 z-[70] mx-auto max-w-md rounded-xl px-4 py-3 text-sm font-semibold shadow-lg border ${
+            scanToast.type === "error"
+              ? "bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900"
+              : "bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900"
+          }`}
+          role="status"
+        >
+          {scanToast.message}
+        </div>
+      )}
+
       {/* Header */}
       <header className="sticky top-0 z-20 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
@@ -225,6 +305,49 @@ export default function PosPage() {
       <div className="max-w-4xl mx-auto p-4 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Left column: Catalog / Product Picker */}
         <div className="lg:col-span-7 space-y-3">
+          {/* Barcode scanner bar — laser gun, manual entry, or camera */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <ScanBarcode
+                size={18}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-600 dark:text-emerald-400"
+              />
+              <input
+                ref={barcodeInputRef}
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                autoFocus
+                placeholder="Scan or type barcode…"
+                value={barcodeInput}
+                onChange={(e) => setBarcodeInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleBarcodeAdd(barcodeInput);
+                  }
+                }}
+                className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/20 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => handleBarcodeAdd(barcodeInput)}
+              className="shrink-0 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition"
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsCameraScannerOpen(true)}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              title="Scan with camera"
+            >
+              <Camera size={15} />
+              <span className="hidden sm:inline">Camera</span>
+            </button>
+          </div>
+
           <div className="relative">
             <Search
               size={18}
@@ -243,7 +366,9 @@ export default function PosPage() {
             <div className="text-center py-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
               <Package size={40} className="mx-auto text-slate-300 dark:text-slate-600 mb-2" />
               <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-                {searchQuery ? "No matching products found" : "No products available in inventory"}
+                {searchQuery
+                  ? "No matching products found"
+                  : "No products available in inventory"}
               </p>
               <Link
                 href="/inventory"
@@ -292,7 +417,6 @@ export default function PosPage() {
         {/* Right column: Cart Breakdown & Checkout */}
         <div className="lg:col-span-5 flex flex-col">
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sticky top-20 flex flex-col h-full space-y-4">
-            
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div className="flex items-center gap-2">
@@ -310,7 +434,7 @@ export default function PosPage() {
             <div className="flex-1 overflow-y-auto max-h-72 space-y-2.5 pr-1">
               {cart.length === 0 ? (
                 <div className="text-center py-10 text-slate-400 text-xs">
-                  Cart is empty. Tap products to add them.
+                  Cart is empty. Tap products or scan a barcode to add them.
                 </div>
               ) : (
                 cart.map((item) => (
@@ -353,7 +477,7 @@ export default function PosPage() {
               )}
             </div>
 
-            {/* NEW: Customer / Udhaar Selector */}
+            {/* Customer / Udhaar Selector */}
             <div className="border-t border-slate-100 dark:border-slate-800 pt-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
@@ -425,6 +549,12 @@ export default function PosPage() {
           </div>
         </div>
       </div>
+
+      <BarcodeScannerModal
+        open={isCameraScannerOpen}
+        onClose={() => setIsCameraScannerOpen(false)}
+        onScan={handleBarcodeAdd}
+      />
 
       {/* Checkout Selection Modal */}
       {isCheckoutModalOpen && (

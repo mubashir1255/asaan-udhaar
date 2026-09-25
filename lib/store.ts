@@ -69,7 +69,8 @@ export const useStore = create<AppState>()(
       language: "en",
       theme: "light",
       appPin: null,
-      isLocked: false,
+      // Defaults locked; excluded from persist so reload always requires PIN re-auth
+      isLocked: true,
 
       setLanguage: (language) => set({ language }),
       toggleLanguage: () =>
@@ -318,18 +319,35 @@ export const useStore = create<AppState>()(
 
       restoreFromBackup: (backup: BackupData) => {
         if (!backup) return;
+        const restoredPin = backup.appPin ?? null;
         set({
           customers: Array.isArray(backup.customers) ? backup.customers : [],
           transactions: Array.isArray(backup.transactions) ? backup.transactions : [],
           products: Array.isArray(backup.products) ? backup.products : [],
           businessProfile: backup.businessProfile || get().businessProfile,
-          appPin: backup.appPin ?? null,
+          appPin: restoredPin,
+          isLocked: Boolean(restoredPin),
         });
       },
     }),
     {
       name: "asaan-udhaar-storage",
       storage: createJSONStorage(() => localStorage),
+      // Persist PIN + data, but never the unlock flag — reload always re-locks
+      partialize: (state) => ({
+        customers: state.customers,
+        transactions: state.transactions,
+        products: state.products,
+        businessProfile: state.businessProfile,
+        language: state.language,
+        theme: state.theme,
+        appPin: state.appPin,
+      }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        // Force lock whenever a PIN exists after cold start / refresh
+        state.isLocked = Boolean(state.appPin);
+      },
     }
   )
 );

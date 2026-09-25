@@ -7,7 +7,6 @@ import {
   ChevronRight,
   CirclePlus,
   LayoutDashboard,
-  Menu,
   ReceiptText,
   Settings,
   Users,
@@ -131,6 +130,16 @@ export default function Home() {
     { label: t.nav.settings, icon: Settings, href: "/settings" },
   ];
 
+  // Compact mobile tabs — Reports/Transactions share one entry to fit 6 slots
+  const mobileNavigation = [
+    { label: t.nav.dashboard, icon: LayoutDashboard, href: "/" },
+    { label: t.nav.customers, icon: Users, href: "/customers" },
+    { label: "POS", icon: ShoppingCart, href: "/pos" },
+    { label: "Inventory", icon: Package, href: "/inventory" },
+    { label: language === "en" ? "Reports" : t.nav.transactions, icon: ReceiptText, href: "/transactions" },
+    { label: t.nav.settings, icon: Settings, href: "/settings" },
+  ];
+
   return (
     <main
       dir={isRTL ? "rtl" : "ltr"}
@@ -195,12 +204,6 @@ export default function Home() {
         <header className="sticky top-0 z-20 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur transition-colors">
           <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-3">
-              <button
-                aria-label="Open menu"
-                className="rounded-lg p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 lg:hidden"
-              >
-                <Menu size={22} />
-              </button>
               <div className="lg:hidden flex items-center gap-2">
                 <img
                   src="/logo.png"
@@ -548,22 +551,22 @@ export default function Home() {
         </section>
 
         {/* Mobile Bottom Navigation */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur lg:hidden">
-          <div className="grid grid-cols-5">
-            {navigation.slice(0, 5).map((item) => {
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur lg:hidden safe-area-pb">
+          <div className="grid grid-cols-6">
+            {mobileNavigation.map((item) => {
               const Icon = item.icon;
               const isActive = item.href === "/";
 
               return (
                 <Link
-                  key={item.label}
+                  key={item.href}
                   href={item.href}
-                  className={`flex flex-col items-center gap-1 px-1 py-3 text-[10px] font-medium transition ${
+                  className={`flex flex-col items-center justify-center gap-0.5 px-0.5 py-2.5 min-w-0 text-[9px] sm:text-[10px] font-medium transition ${
                     isActive ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400"
                   }`}
                 >
-                  <Icon size={19} />
-                  <span>{item.label}</span>
+                  <Icon size={17} className="shrink-0" />
+                  <span className="truncate max-w-full leading-tight text-center">{item.label}</span>
                 </Link>
               );
             })}

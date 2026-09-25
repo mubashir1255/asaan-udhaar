@@ -23,7 +23,12 @@ export default function PinLockModal() {
   const [enteredPin, setEnteredPin] = useState("");
   const [errorShake, setErrorShake] = useState(false);
 
-  if (!hasHydrated || !appPin || !isLocked) {
+  if (!hasHydrated || !appPin) {
+    return null;
+  }
+
+  // Locked whenever PIN is set and unlock flag is false (isLocked === true)
+  if (!isLocked) {
     return null;
   }
 

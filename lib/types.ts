@@ -12,6 +12,7 @@ export interface Product {
   salePrice: number; // What customer buys it for
   stockQuantity: number; // Remaining stock on shelf
   unit?: string; // kg, pack, piece, etc.
+  barcode?: string; // Optional barcode / SKU for laser & camera scanning
   createdAt: string;
 }
 

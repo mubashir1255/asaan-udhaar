@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { translations } from "@/lib/translations";
+import { shareViaWhatsApp } from "@/lib/whatsapp";
 import {
   formatCurrency,
   formatDate,
@@ -136,17 +137,7 @@ export default function RecordPaymentClient({ customerId }: { customerId: string
         `ادائیگی کا بہت شکریہ!`;
     }
 
-    const encodedMsg = encodeURIComponent(message);
-
-    if (customer.phone) {
-      let cleanPhone = customer.phone.replace(/[^0-9]/g, "");
-      if (cleanPhone.startsWith("0")) {
-        cleanPhone = "92" + cleanPhone.slice(1);
-      }
-      window.open(`https://wa.me/${cleanPhone}?text=${encodedMsg}`, "_blank");
-    } else {
-      window.open(`https://api.whatsapp.com/send?text=${encodedMsg}`, "_blank");
-    }
+    shareViaWhatsApp(customer.phone, message);
 
     router.push(`/customers/details?id=${customer.id}`);
   };

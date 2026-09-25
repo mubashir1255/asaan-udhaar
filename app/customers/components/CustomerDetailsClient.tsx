@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { translations } from "@/lib/translations";
+import { shareViaWhatsApp } from "@/lib/whatsapp";
 import {
   formatCurrency,
   formatDate,
@@ -109,11 +110,6 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
   const isOverdue = isCustomerOverdue(transactions, outstanding);
 
   const sendWhatsAppReminder = () => {
-    let cleanPhone = (customer.phone || "").replace(/[^0-9]/g, "");
-    if (cleanPhone.startsWith("0")) {
-      cleanPhone = "92" + cleanPhone.slice(1);
-    }
-
     const template =
       language === "en"
         ? businessProfile?.customMessageEn ||
@@ -129,20 +125,10 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
         businessProfile?.storeName || (language === "en" ? "Our Store" : "ہماری دکان")
       );
 
-    const encoded = encodeURIComponent(message);
-    if (cleanPhone) {
-      window.open(`https://wa.me/${cleanPhone}?text=${encoded}`, "_blank");
-    } else {
-      window.open(`https://api.whatsapp.com/send?text=${encoded}`, "_blank");
-    }
+    shareViaWhatsApp(customer.phone, message);
   };
 
   const sendTransactionSlip = (tx: Transaction, lang: "en" | "ur") => {
-    let cleanPhone = (customer.phone || "").replace(/[^0-9]/g, "");
-    if (cleanPhone.startsWith("0")) {
-      cleanPhone = "92" + cleanPhone.slice(1);
-    }
-
     const store = businessProfile?.storeName || "Asaan Udhaar";
     const amountStr = `Rs. ${tx.amount.toLocaleString("en-PK")}`;
     const balanceStr = `Rs. ${outstanding.toLocaleString("en-PK")}`;
@@ -219,12 +205,7 @@ export default function CustomerDetailsClient({ customerId }: { customerId: stri
         `ہم سے خریداری کرنے کا شکریہ!`;
     }
 
-    const encoded = encodeURIComponent(message);
-    if (cleanPhone) {
-      window.open(`https://wa.me/${cleanPhone}?text=${encoded}`, "_blank");
-    } else {
-      window.open(`https://api.whatsapp.com/send?text=${encoded}`, "_blank");
-    }
+    shareViaWhatsApp(customer.phone, message);
     setShowSlipModal(false);
   };
 
